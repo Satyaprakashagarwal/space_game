@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Spaceship Game - Final</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      background: #111;
+      border: 2px solid white;
+    }
+    #retryBtn {
+      font-size: 20px;
+      padding: 10px 20px;
+      margin-bottom: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <button id="retryBtn">🔁 Retry</button>
+  <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+  <!-- Audio -->
+  <audio id="bgMusic" src="background.mp3" loop></audio>
+  <audio id="boomSound" src="explosion.mp3"></audio>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const retryBtn = document.getElementById("retryBtn");
+    const bgMusic = document.getElementById("bgMusic");
+    const boomSound = document.getElementById("boomSound");
+
+    let isGameOver = false;
+    let score = 0;
+    let lives = 3;
+
+    const spaceship = {
+      x: canvas.width / 2 - 25,
+      y: canvas.height - 60,
+      width: 50,
+      height: 50,
+      speed: 20
+    };
+
+    let bullets = [];
+    let enemies = [];
+    let explosions = [];
+
+    // Controls
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" && spaceship.x > 0) {
+        spaceship.x -= spaceship.speed;
+      } else if (e.key === "ArrowRight" && spaceship.x + spaceship.width < canvas.width) {
+        spaceship.x += spaceship.speed;
+      } else if (e.key === " ") {
+        bullets.push({
+          x: spaceship.x + spaceship.width / 2 - 2.5,
+          y: spaceship.y,
+          width: 5,
+          height: 10,
+          speed: 7
+        });
+      }
+    });
+
+    // Stars
+    let stars = [];
+    for (let i = 0; i < 100; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2,
+        speed: Math.random() * 1 + 0.5
+      });
+    }
+
+    function draw() {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = "white";
+      stars.forEach(star => {
+        star.y += star.speed;
+        if (star.y > canvas.height) {
+          star.y = 0;
+          star.x = Math.random() * canvas.width;
+        }
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Spaceship
+      ctx.drawImage(spaceshipImg, spaceship.x, spaceship.y, spaceship.width, spaceship.height);
+
+      // Bullets
+      ctx.fillStyle = "yellow";
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        let bullet = bullets[i];
+        bullet.y -= bullet.speed;
+        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        if (bullet.y + bullet.height < 0) bullets.splice(i, 1);
+      }
+
+      // Explosions
+      explosions.forEach((explosion, i) => {
+        ctx.beginPath();
+        ctx.arc(explosion.x + 20, explosion.y + 20, explosion.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = "orange";
+        ctx.stroke();
+        explosion.radius += 2;
+        if (explosion.radius > 20) explosions.splice(i, 1);
+      });
+
+      // Enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        let enemy = enemies[i];
+        let hasCollided = false;
+        enemy.y += enemy.speed;
+        ctx.fillStyle = "red";
+        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+        // Bullet collision
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          let bullet = bullets[j];
+          if (
+            bullet.x < enemy.x + enemy.width &&
+            bullet.x + bullet.width > enemy.x &&
+            bullet.y < enemy.y + enemy.height &&
+            bullet.y + bullet.height > enemy.y
+          ) {
+            explosions.push({ x: enemy.x, y: enemy.y, radius: 0 });
+            boomSound.currentTime = 0;
+            boomSound.play();
+            enemies.splice(i, 1);
+            bullets.splice(j, 1);
+            score++;
+            hasCollided = true;
+            break;
+          }
+        }
+
+        // Enemy hits player
+        if (
+          enemy.x < spaceship.x + spaceship.width &&
+          enemy.x + enemy.width > spaceship.x &&
+          enemy.y < spaceship.y + spaceship.height &&
+          enemy.y + enemy.height > spaceship.y
+        ) {
+          lives--;
+          explosions.push({ x: enemy.x, y: enemy.y, radius: 0 });
+          enemies.splice(i, 1);
+          hasCollided = true;
+          if (lives <= 0) isGameOver = true;
+          continue;
+        }
+
+        // Remove enemies if they fall off screen (but NO life deduction)
+        if (!hasCollided && enemy.y > canvas.height) {
+          enemies.splice(i, 1);
+        }
+      }
+
+      // Score and Lives
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 10, 30);
+      ctx.fillText("Lives: " + lives, 10, 60);
+
+      // Game Over
+      if (isGameOver) {
+        ctx.fillStyle = "white";
+        ctx.font = "40px Arial";
+        ctx.fillText("Game Over", canvas.width / 2 - 120, canvas.height / 2);
+        ctx.font = "20px Arial";
+        ctx.fillText("Press R or Retry", canvas.width / 2 - 100, canvas.height / 2 + 40);
+        retryBtn.style.display = "block";
+        bgMusic.pause();
+        return;
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    const spaceshipImg = new Image();
+    spaceshipImg.src = "spaceship.png";
+    spaceshipImg.onload = () => {
+      bgMusic.volume = 0.3;
+      bgMusic.play();
+      draw();
+    };
+
+    // Enemies auto spawn
+    setInterval(() => {
+      if (!isGameOver) {
+        enemies.push({
+          x: Math.random() * (canvas.width - 40),
+          y: -40,
+          width: 40,
+          height: 40,
+          speed: 2
+        });
+      }
+    }, 1500);
+
+    // Auto bullet fire
+    setInterval(() => {
+      if (!isGameOver) {
+        bullets.push({
+          x: spaceship.x + spaceship.width / 2 - 1.5,
+          y: spaceship.y,
+          width: 3,
+          height: 10,
+          speed: 7
+        });
+      }
+    }, 300);
+
+    // Retry Button click
+    retryBtn.addEventListener("click", () => {
+      location.reload();
+    });
+
+    // Restart on R key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "r" || e.key === "R") {
+        location.reload();
+      }
+    });
+  </script>
+</body>
+</html>
